@@ -11,6 +11,7 @@ One spec per functional domain. Add a row when you add a spec, and update the st
 | Spec | Scope | Status |
 |------|-------|--------|
 | [`code-map.md`](code-map.md) | Code map: index for Claude Code, public page, and the spec/code bijectivity check. | implemented |
+| [`continuous-integration.md`](continuous-integration.md) | GitHub Actions: checks on every PR and push, publication of the code map. | implemented |
 
 ## Template
 

@@ -1,0 +1,54 @@
+# HERMES checks (docs/spec/continuous-integration.md): on every PR and every push to main, with no path filter, so nothing
+# escapes them. Two parallel jobs:
+# - tools: unit tests of tools/ and the spec/code bijectivity check of the code map (docs/spec/code-map.md);
+# - app: the application's test suite, skipped while pyproject.toml is absent (before the migration from dotfiles).
+name: HERMES checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A PR that receives a new commit cancels the previous run; pushes to main and manual runs never cancel each other.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.head_ref) || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python3 -m unittest discover -s tools -p 'test_*.py'
+      # Fails when an implemented spec cites code that does not exist; lists modules without spec as warnings.
+      - run: python3 tools/make_code_map.py --check
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # hashFiles() is not available in a job-level `if`: each step carries the guard.
+      - uses: actions/setup-python@v5
+        if: hashFiles('pyproject.toml') != ''
+        with:
+          python-version: "3.11"
+      # WeasyPrint (PDF export) loads a native GTK stack (Pango/Cairo/GDK-Pixbuf) through cffi as soon as it is
+      # imported, hence as soon as pytest collects the tests.
+      - name: Install the WeasyPrint system libraries
+        if: hashFiles('pyproject.toml') != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libcairo2 libffi-dev
+      - name: Install the dependencies
+        if: hashFiles('pyproject.toml') != ''
+        run: pip install -e ".[dev]"
+      - name: Run the tests
+        if: hashFiles('pyproject.toml') != ''
+        run: pytest

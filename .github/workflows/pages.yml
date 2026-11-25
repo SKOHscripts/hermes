@@ -1,0 +1,48 @@
+# GitHub Pages of HERMES (docs/spec/continuous-integration.md § Pages): the code map at /code/ (docs/spec/code-map.md).
+# Prerequisite, once: Settings → Pages → Source: "GitHub Actions".
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    # The map depends on the code, the specs, the generator and the logo.
+    paths: ["app/**", "tools/**", "docs/spec/**", "assets/logo.svg", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Code map
+        run: |
+          out="$RUNNER_TEMP/site"
+          python3 tools/make_code_map.py --html "$out/code/index.html" --stamp "$GITHUB_SHA"
+          cp assets/logo.svg "$out/logo.svg"
+          # No home page yet: the root sends to the code map.
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=code/"><title>HERMES</title><a href="code/">HERMES code map</a>\n' > "$out/index.html"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
